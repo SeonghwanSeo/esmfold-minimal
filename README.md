@@ -8,7 +8,8 @@ I note that this implementation is operated with [cuEquivariance kernel](https:/
 ## Installation
 
 ```bash
-pip install -e git+https://github.com/SeonghwanSeo/esmfold
+# Install with pip
+pip install git+https://github.com/SeonghwanSeo/esmfold-minimal
 # Optional: for biotite dependency
 pip install biotite
 ```

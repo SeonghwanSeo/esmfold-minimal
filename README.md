@@ -59,9 +59,10 @@ usage: run-esmfold [-h] -i FASTA -o PDB [--num-recycles NUM_RECYCLES]
 
 optional arguments:
   -h, --help            show this help message and exit
-  -i FASTA, --fasta FASTA
+  -i INPUT_FASTA, --input-fasta INPUT_FASTA
                         Path to input FASTA file
-  -o PDB, --pdb PDB     Path to output PDB directory
+  -o OUT_DIR, --out-dir OUT_DIR
+                        Path to output PDB directory  
   --num-recycles NUM_RECYCLES
                         Number of recycles to run. Defaults to number used in
                         training (4).

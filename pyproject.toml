@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esmfold"
+version = "0.0.1"
+authors = [
+  { name = "SeonghwanSeo", email = "shwan0106@gmail.com" },
+]
+requires-python = ">=3.10"
+license = { text = "MIT License" }
+dependencies = [
+  # core dependencies
+  "torch",
+  "numpy",
+  "scipy",
+  "einops",
+  "dm-tree",
+  "omegaconf",
+
+  # cuequivariance
+  "cuequivariance_torch>=0.6.0",
+  "cuequivariance_ops_cu12>=0.6.0",
+  "cuequivariance_ops_torch_cu12>=0.6.0",
+]
+[project.scripts]
+run-esmfold = "esmfold.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["esmfold*"]

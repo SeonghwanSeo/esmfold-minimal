@@ -108,7 +108,13 @@ class TriangularSelfAttentionBlock(nn.Module):
         torch.nn.init.zeros_(self.mlp_pair.mlp[-2].bias)
 
     def forward(
-        self, sequence_state, pairwise_state, mask=None, chunk_size=None, **__kwargs
+        self,
+        sequence_state,
+        pairwise_state,
+        mask=None,
+        chunk_size=None,
+        use_cuequiv_kernel=False,
+        **__kwargs,
     ):
         """
         Inputs:
@@ -146,18 +152,36 @@ class TriangularSelfAttentionBlock(nn.Module):
         pairwise_state = pairwise_state + self.sequence_to_pair(sequence_state)
 
         # Axial attention with triangular bias.
-        tri_mask = mask.unsqueeze(2) * mask.unsqueeze(1) if mask is not None else None
+        tri_mask = mask.unsqueeze(2) & mask.unsqueeze(1) if mask is not None else None
         pairwise_state = pairwise_state + self.row_drop(
-            self.tri_mul_out(pairwise_state, mask=tri_mask)
+            self.tri_mul_out(
+                pairwise_state,
+                mask=tri_mask,
+                use_cuequiv_kernel=use_cuequiv_kernel,
+            )
         )
         pairwise_state = pairwise_state + self.col_drop(
-            self.tri_mul_in(pairwise_state, mask=tri_mask)
+            self.tri_mul_in(
+                pairwise_state,
+                mask=tri_mask,
+                use_cuequiv_kernel=use_cuequiv_kernel,
+            )
         )
         pairwise_state = pairwise_state + self.row_drop(
-            self.tri_att_start(pairwise_state, mask=tri_mask, chunk_size=chunk_size)
+            self.tri_att_start(
+                pairwise_state,
+                mask=tri_mask,
+                chunk_size=chunk_size,
+                use_cuequiv_kernel=use_cuequiv_kernel,
+            )
         )
         pairwise_state = pairwise_state + self.col_drop(
-            self.tri_att_end(pairwise_state, mask=tri_mask, chunk_size=chunk_size)
+            self.tri_att_end(
+                pairwise_state,
+                mask=tri_mask,
+                chunk_size=chunk_size,
+                use_cuequiv_kernel=use_cuequiv_kernel,
+            )
         )
 
         # MLP over pairs.

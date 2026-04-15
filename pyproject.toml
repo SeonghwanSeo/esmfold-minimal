@@ -18,8 +18,9 @@ dependencies = [
   "einops",
   "dm-tree",
   "omegaconf",
-
-  # cuequivariance
+]
+[project.optional-dependencies]
+cueq = [
   "cuequivariance_torch>=0.6.0",
   "cuequivariance_ops_cu12>=0.6.0",
   "cuequivariance_ops_torch_cu12>=0.6.0",

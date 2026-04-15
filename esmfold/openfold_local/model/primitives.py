@@ -178,7 +178,9 @@ class Linear(nn.Linear):
         if self.precision is not None:
             with torch.autocast("cuda", enabled=False):
                 bias = (
-                    self.bias.to(dtype=self.precision) if self.bias is not None else None
+                    self.bias.to(dtype=self.precision)
+                    if self.bias is not None
+                    else None
                 )
                 return nn.functional.linear(
                     input.to(dtype=self.precision),
@@ -322,7 +324,9 @@ class Attention(nn.Module):
 
         self.linear_g = None
         if self.gating:
-            self.linear_g = Linear(self.c_q, self.c_hidden * self.no_heads, init="gating")
+            self.linear_g = Linear(
+                self.c_q, self.c_hidden * self.no_heads, init="gating"
+            )
 
         self.sigmoid = nn.Sigmoid()
 
@@ -370,7 +374,7 @@ class Attention(nn.Module):
         q_x: torch.Tensor,
         kv_x: torch.Tensor,
         biases: list[torch.Tensor] | None = None,
-        use_cueq: bool = True,
+        use_cuequiv_kernel: bool = False,
     ) -> torch.Tensor:
         """
         Args:
@@ -387,9 +391,9 @@ class Attention(nn.Module):
             biases = []
 
         # DeepSpeed attention kernel applies scaling internally
-        q, k, v = self._prep_qkv(q_x, kv_x, apply_scale=not use_cueq)
+        q, k, v = self._prep_qkv(q_x, kv_x, apply_scale=not use_cuequiv_kernel)
 
-        if use_cueq:
+        if use_cuequiv_kernel:
             scale = 1 / math.sqrt(self.c_hidden)
             o = _cueq_triangle_attn(q, k, v, biases, scale=scale)
         else:

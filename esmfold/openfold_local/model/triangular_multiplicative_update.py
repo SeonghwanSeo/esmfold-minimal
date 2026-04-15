@@ -197,7 +197,7 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
         if mask is None:
             mask = z.new_ones(z.shape[:-1])
 
-        mask = mask.unsqueeze(-1)
+        mask = mask.to(z.dtype).unsqueeze(-1)
 
         def compute_projection_helper(pair, mask, a=True):
             if a:
@@ -400,7 +400,7 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
         z: torch.Tensor,
         mask: torch.Tensor | None = None,
         inplace_safe: bool = False,
-        use_cueq_triangle_kernels: bool = False,
+        use_cuequiv_kernel: bool = False,
         _add_with_inplace: bool = False,
         _inplace_chunk_size: int | None = 256,
     ) -> torch.Tensor:
@@ -417,33 +417,27 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
         ## inplace safe is used across the codebase and so should not
         ## be disabled. So if use_cueq_triangle_kernels is True, it will always
         ## supersede inplace_safe
-        if use_cueq_triangle_kernels:
+        if use_cuequiv_kernel:
             ## VS: The cuequivariance kernel is based on the boltz implementation
             ## of triangle multiplicative update, which fuses the linear_*_p
             ## projections into a single layer (similarly for linear_*_g).
             ## this why we need to concat the projection layers here
             x = _cueq_triangle_mult(
                 z=z,
-                g_in_weight=torch.cat(
-                    [
-                        self.linear_a_g.weight,
-                        self.linear_b_g.weight,
-                    ]
-                ),
-                p_in_weight=torch.cat(
-                    [
-                        self.linear_a_p.weight,
-                        self.linear_b_p.weight,
-                    ]
-                ),
-                _outgoing=self._outgoing,
+                direction="outgoing" if self._outgoing else "incoming",
                 mask=mask,
                 norm_in_weight=self.layer_norm_in.weight,
                 norm_in_bias=self.layer_norm_in.bias,
+                p_in_weight=torch.cat([self.linear_a_p.weight, self.linear_b_p.weight]),
+                p_in_bias=torch.cat([self.linear_a_p.bias, self.linear_b_p.bias]),
+                g_in_weight=torch.cat([self.linear_a_g.weight, self.linear_b_g.weight]),
+                g_in_bias=torch.cat([self.linear_a_g.bias, self.linear_b_g.bias]),
                 norm_out_weight=self.layer_norm_out.weight,
                 norm_out_bias=self.layer_norm_out.bias,
                 p_out_weight=self.linear_z.weight,
+                p_out_bias=self.linear_z.bias,
                 g_out_weight=self.linear_g.weight,
+                g_out_bias=self.linear_g.bias,
             )
             return x
 
@@ -459,7 +453,7 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
         if mask is None:
             mask = z.new_ones(z.shape[:-1])
 
-        mask = mask.unsqueeze(-1)
+        mask = mask.to(z.dtype).unsqueeze(-1)
 
         z = self.layer_norm_in(z)
         a = mask  # (1,s, s, 1)
@@ -498,16 +492,20 @@ class TriangleMultiplicationIncoming(TriangleMultiplicativeUpdate):
 
 def _cueq_triangle_mult(
     z: torch.Tensor,
-    g_in_weight: torch.Tensor,
-    p_in_weight: torch.Tensor,
-    _outgoing: bool,
+    direction: str,
     mask: torch.Tensor | None,
     norm_in_weight: torch.Tensor,
     norm_in_bias: torch.Tensor,
+    p_in_weight: torch.Tensor,
+    p_in_bias: torch.Tensor,
+    g_in_weight: torch.Tensor,
+    g_in_bias: torch.Tensor,
     norm_out_weight: torch.Tensor,
     norm_out_bias: torch.Tensor,
     p_out_weight: torch.Tensor,
+    p_out_bias: torch.Tensor,
     g_out_weight: torch.Tensor,
+    g_out_bias: torch.Tensor,
 ) -> torch.Tensor:
     ##VS: similar issue here as to the cueq triangle attention
     ## kernel, we need to reshape the input so that batch and
@@ -534,16 +532,20 @@ def _cueq_triangle_mult(
 
     x = triangle_multiplicative_update(
         z,
-        direction="outgoing" if _outgoing else "incoming",
+        direction=direction,
         mask=mask,
         norm_in_weight=norm_in_weight,
         norm_in_bias=norm_in_bias,
-        g_in_weight=g_in_weight,
         p_in_weight=p_in_weight,
+        p_in_bias=p_in_bias,
+        g_in_weight=g_in_weight,
+        g_in_bias=g_in_bias,
         norm_out_weight=norm_out_weight,
         norm_out_bias=norm_out_bias,
         p_out_weight=p_out_weight,
+        p_out_bias=p_out_bias,
         g_out_weight=g_out_weight,
+        g_out_bias=g_out_bias,
         eps=1e-5,
     )
     if is_batched_input:

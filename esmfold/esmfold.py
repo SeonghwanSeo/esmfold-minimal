@@ -357,6 +357,12 @@ class ESMFold(nn.Module):
         # Setting the value to None will return to default behavior, disable chunking.
         self.trunk.set_chunk_size(chunk_size)
 
+    def set_cuequivariance_kernel(self, use_kernel: bool):
+        self.trunk.set_cuequivariance_kernel(use_kernel)
+
+    def set_precision(self, dtype: torch.dtype):
+        self.trunk.set_precision(dtype)
+
     @property
     def device(self):
         return self.esm_s_combine.device

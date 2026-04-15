@@ -70,6 +70,18 @@ def create_parser():
         "for batched prediction. Lowering this can help with out of memory issues, if these occur on "
         "short sequences.",
     )
+    parser.add_argument(
+        "--no-kernel",
+        action="store_true",
+        help="Whether to disable the cuequivariance kernel",
+    )
+    parser.add_argument(
+        "--precision",
+        choices=["fp32", "bf16"],
+        default="fp32",
+        help="Precision to run the model in. `bf16` can reduce memory usage and speed up inference on "
+        "supported hardware (like A100s).",
+    )
     # TODO: test this option works well
     parser.add_argument(
         "--chunk-size",
@@ -89,6 +101,7 @@ def run(args):
     import torch
 
     from esmfold import load_esmfold
+    from esmfold.esmfold import ESMFold
     from esmfold.esm.data import read_fasta
 
     input_fasta = Path(args.input_fasta)
@@ -130,9 +143,21 @@ def run(args):
         # if pretrained model path is available
         torch.hub.set_dir(args.model_dir)
 
-    model = load_esmfold().eval().cuda()
-    model.set_chunk_size(args.chunk_size)
-    logger.info("Starting Predictions")
+    model: ESMFold = load_esmfold().eval().cuda()
+    if args.chunk_size is not None:
+        model.set_chunk_size(args.chunk_size)
+    if not args.no_kernel:
+        model.set_cuequivariance_kernel(True)
+    if args.precision == "bf16":
+        model.set_precision(torch.bfloat16)
+
+    logger.info(
+        f"Starting Predictions: "
+        f"precision={args.precision}, "
+        f"kernel={'off' if args.no_kernel else 'on'}, "
+        f"chunk_size={args.chunk_size if args.chunk_size is not None else 'null'}"
+    )
+
     batched_sequences = create_batched_sequence_datasest(
         all_sequences, args.max_tokens_per_batch
     )

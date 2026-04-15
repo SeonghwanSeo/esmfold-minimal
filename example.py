@@ -4,9 +4,12 @@ import biotite.structure.io as bsio
 import torch
 
 from esmfold import load_esmfold
+from esmfold.esmfold import ESMFold
 
 print("Loading ESMFold model...")
-model = load_esmfold().eval().cuda()
+model: ESMFold = load_esmfold().eval().cuda()
+model.set_cuequivariance_kernel(True)
+model.set_precision(torch.bfloat16)
 
 print("Model loaded. Running inference...")
 sequence = "MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG"

@@ -1,16 +1,21 @@
 # Easy-to-install ESMFold.
 
-This repository provides easy-to-install ESMFold models for protein structure prediction, without complicated openfold dependencies.
-This repository is a fork of [ESM](https://github.com/facebookresearch/esm/tree/main) by Facebook Research, allowing users to easily install and use ESMFold for protein structure prediction.
+This is a performance-optimized, easy-to-install version of [ESMFold](https://github.com/facebookresearch/esm/tree/main) (Facebook Research) for protein structure prediction.
 
-I note that this implementation is operated with [cuEquivariance kernel](https://docs.nvidia.com/cuda/cuequivariance/).
+**Key features:**
+* 📦 **Minimal Dependencies:** No complicated openfold dependencies.
+* 🚀 **High Performance:** Supports cuEquivariance kernels for optimized triangle attention and multiplicative update operations.
+* ⚡ **Fast Inference:** Native support for bfloat16 (bf16) precision to reduce memory usage and speed up prediction on modern GPUs.
 
 ## Installation
 
 ```bash
 # Install with pip
-pip install git+https://github.com/SeonghwanSeo/esmfold-minimal
-# Optional: for biotite dependency
+pip install "esmfold @ git+https://github.com/SeonghwanSeo/esmfold-minimal"
+# For cuEquivariance kernel support, install with the `cu-equivariance` extra
+pip install "esmfold[cueq] @ git+https://github.com/SeonghwanSeo/esmfold-minimal"
+
+# Optional: for biotite dependency to run the example script.
 pip install biotite
 ```
 
@@ -30,11 +35,13 @@ from esmfold import load_esmfold
 print("Loading ESMFold model...")
 model = load_esmfold().eval().cuda()
 
+model.set_cuequivariance_kernel(True)  # Enable cuEquivariance kernel 
+model.set_precision("bf16")  # Use bf16 precision for faster inference
+
 sequence = "MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG"
 
 print("Model loaded. Running inference...")
-with torch.no_grad():
-    output = model.infer_pdb(sequence)
+output = model.infer_pdb(sequence)
 
 print("Inference complete. Saving output...")
 with open("result.pdb", "w") as f:
@@ -53,9 +60,10 @@ run-esmfold -i /path/to/input.fasta -o /path/to/out/pdb/
 ```
 
 ```
-usage: run-esmfold [-h] -i FASTA -o PDB [--num-recycles NUM_RECYCLES]
-                [--max-tokens-per-batch MAX_TOKENS_PER_BATCH]
-                [--chunk-size CHUNK_SIZE]
+usage: run-esmfold [-h] -i INPUT_FASTA -o OUT_DIR [-m MODEL_DIR] 
+                [--num-recycles NUM_RECYCLES] 
+                [--max-tokens-per-batch MAX_TOKENS_PER_BATCH] [--no-kernel] 
+                [--precision {fp32,bf16}] [--chunk-size CHUNK_SIZE]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -71,10 +79,8 @@ optional arguments:
                         will group shorter sequences together for batched
                         prediction. Lowering this can help with out of memory
                         issues, if these occur on short sequences.
-  --chunk-size CHUNK_SIZE
-                        Chunks axial attention computation to reduce memory
-                        usage from O(L^2) to O(L). Equivalent to running a for
-                        loop over chunks of of each dimension. Lower values
-                        will result in lower memory usage at the cost of
-                        speed. Recommended values: 128, 64, 32. Default: None.
+  --no-kernel           Whether to disable the cuequivariance kernel
+  --precision {fp32,bf16}
+                        Precision to run the model in. `bf16` can reduce memory 
+                        usage and speed up inference on supported hardware.
 ```

@@ -44,7 +44,7 @@ def load_hub_workaround(url):
             f"{torch.hub.get_dir()}/checkpoints/{fn}",
             map_location="cpu",
         )
-    except urllib.error.HTTPError as e:
+    except urllib.error.HTTPError:
         raise Exception(
             f"Could not load {url}, check if you specified a correct model name?"
         )

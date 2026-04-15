@@ -121,7 +121,9 @@ class FoldingTrunk(nn.Module):
         assert c_z % self.cfg.pairwise_head_width == 0
         block = TriangularSelfAttentionBlock
 
-        self.pairwise_positional_embedding = RelativePosition(self.cfg.position_bins, c_z)
+        self.pairwise_positional_embedding = RelativePosition(
+            self.cfg.position_bins, c_z
+        )
 
         self.blocks = nn.ModuleList(
             [
@@ -147,6 +149,8 @@ class FoldingTrunk(nn.Module):
         self.trunk2sm_z = nn.Linear(c_z, self.structure_module.c_z)
 
         self.chunk_size = self.cfg.chunk_size
+        self.use_cuequiv_kernel = False
+        self.precision: torch.dtype = torch.float32
 
     def set_chunk_size(self, chunk_size):
         # This parameter means the axial attention will be computed
@@ -154,6 +158,12 @@ class FoldingTrunk(nn.Module):
         # It's equivalent to running a for loop over chunks of the dimension we're iterative over,
         # where the chunk_size is the size of the chunks, so 128 would mean to parse 128-lengthed chunks.
         self.chunk_size = chunk_size
+
+    def set_cuequivariance_kernel(self, use_kernel: bool):
+        self.use_cuequiv_kernel = use_kernel
+
+    def set_precision(self, dtype: torch.dtype):
+        self.precision = dtype
 
     def forward(
         self,
@@ -183,18 +193,20 @@ class FoldingTrunk(nn.Module):
             no_recycles = self.cfg.max_recycles
         else:
             assert no_recycles >= 0, "Number of recycles must not be negative."
-            no_recycles += (
-                1  # First 'recycle' is just the standard forward pass through the model.
-            )
+            no_recycles += 1  # First 'recycle' is just the standard forward pass through the model.
 
         def trunk_iter(s, z, residx, mask):
-            z = z + self.pairwise_positional_embedding(residx, mask=mask)
-
+            z += self.pairwise_positional_embedding(residx, mask=mask)
             for block in self.blocks:
                 s, z = block(
-                    s, z, mask=mask, residue_index=residx, chunk_size=self.chunk_size
+                    s,
+                    z,
+                    mask=mask,
+                    residue_index=residx,
+                    chunk_size=self.chunk_size,
+                    use_cuequiv_kernel=self.use_cuequiv_kernel,
                 )
-            return s, z
+            return s.float(), z.float()
 
         s_s = s_s_0
         s_z = s_z_0
@@ -210,7 +222,10 @@ class FoldingTrunk(nn.Module):
                 recycle_z = self.recycle_z_norm(recycle_z.detach())
                 recycle_z += self.recycle_disto(recycle_bins.detach())
 
-                s_s, s_z = trunk_iter(s_s_0 + recycle_s, s_z_0 + recycle_z, residx, mask)
+                s_s = recycle_s.add_(s_s_0)
+                s_z = recycle_z.add_(s_z_0)
+                with torch.autocast(device_type=device.type, dtype=self.precision):
+                    s_s, s_z = trunk_iter(s_s, s_z, residx, mask)
 
                 # === Structure module ===
                 structure = self.structure_module(
@@ -229,7 +244,6 @@ class FoldingTrunk(nn.Module):
                     self.recycle_bins,
                 )
 
-        assert isinstance(structure, dict)  # type: ignore
         structure["s_s"] = s_s
         structure["s_z"] = s_z
 
@@ -252,7 +266,9 @@ class FoldingTrunk(nn.Module):
         a = b.cross(c, dim=-1)
         CB = -0.58273431 * a + 0.56802827 * b - 0.54067466 * c + CA
         dists = (
-            (CB[..., None, :, :] - CB[..., :, None, :]).pow(2).sum(dim=-1, keepdims=True)
+            (CB[..., None, :, :] - CB[..., :, None, :])
+            .pow(2)
+            .sum(dim=-1, keepdims=True)
         )
         bins = torch.sum(dists > boundaries, dim=-1)  # [..., L, L]
         return bins

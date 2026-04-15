@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial, partialmethod
+from functools import partialmethod, partial
 
 import torch
 import torch.nn as nn
@@ -56,6 +56,7 @@ class TriangleAttention(nn.Module):
         x: torch.Tensor,
         biases: list[torch.Tensor],
         chunk_size: int,
+        use_cuequiv_kernel: bool = False,
         inplace_safe: bool = False,
     ) -> torch.Tensor:
         "triangle! triangle!"
@@ -66,9 +67,7 @@ class TriangleAttention(nn.Module):
         }
 
         return chunk_layer(
-            partial(
-                self.mha,
-            ),
+            partial(self.mha, use_cuequiv_kernel=use_cuequiv_kernel),
             mha_inputs,
             chunk_size=chunk_size,
             no_batch_dims=len(x.shape[:-2]),
@@ -80,9 +79,7 @@ class TriangleAttention(nn.Module):
         x: torch.Tensor,
         mask: torch.Tensor | None = None,
         chunk_size: int | None = None,
-        use_memory_efficient_kernel: bool = False,
-        use_deepspeed_evo_attention: bool = False,
-        use_lma: bool = False,
+        use_cuequiv_kernel: bool = False,
         inplace_safe: bool = False,
     ) -> torch.Tensor:
         """
@@ -94,9 +91,7 @@ class TriangleAttention(nn.Module):
         """
         if mask is None:
             # [*, I, J]
-            mask = x.new_ones(
-                x.shape[:-1],
-            )
+            mask = x.new_ones(x.shape[:-1], dtype=torch.bool)
 
         if not self.starting:
             x = x.transpose(-2, -3)
@@ -106,10 +101,14 @@ class TriangleAttention(nn.Module):
         x = self.layer_norm(x)
 
         # [*, I, 1, 1, J]
-        mask_bias = (self.inf * (mask - 1))[..., :, None, None, :]
+        if use_cuequiv_kernel:
+            mask_bias = mask.bool()[..., :, None, None, :]
+        else:
+            mask_bias = (self.inf * (mask.float() - 1))[..., :, None, None, :]
 
         # [*, H, I, J]
-        triangle_bias = permute_final_dims(self.linear(x), (2, 0, 1))
+        with torch.autocast(x.device.type, enabled=False):
+            triangle_bias = permute_final_dims(self.linear(x.float()), (2, 0, 1))
 
         # [*, 1, H, I, J]
         triangle_bias = triangle_bias.unsqueeze(-4)
@@ -121,6 +120,7 @@ class TriangleAttention(nn.Module):
                 x,
                 biases,
                 chunk_size,
+                use_cuequiv_kernel=use_cuequiv_kernel,
                 inplace_safe=inplace_safe,
             )
         else:
@@ -128,6 +128,7 @@ class TriangleAttention(nn.Module):
                 q_x=x,
                 kv_x=x,
                 biases=biases,
+                use_cuequiv_kernel=use_cuequiv_kernel,
             )
 
         if not self.starting:

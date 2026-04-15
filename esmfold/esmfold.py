@@ -23,6 +23,30 @@ from esmfold.openfold_local.utils.loss import (
 from esmfold.trunk import FoldingTrunk, FoldingTrunkConfig
 
 
+def next_to_multiple(x: int, multiple: int) -> int:
+    """Returns the next multiple of `multiple` greater than or equal to `x`."""
+    return ((x + multiple - 1) // multiple) * multiple
+
+
+def pad_to_bucket_size(x: torch.Tensor, pad_v=0) -> torch.Tensor:
+    """Pads the input tensor to the next bucket size.
+    This is used to pad sequences to the next bucket size for efficient batching."""
+    seq_len = x.shape[-1]
+    if seq_len <= 32:
+        bucket_size = next_to_multiple(seq_len, 16)
+    elif seq_len <= 256:
+        bucket_size = next_to_multiple(seq_len, 64)
+    elif seq_len <= 2048:
+        bucket_size = next_to_multiple(seq_len, 128)
+    else:
+        return x
+
+    padding = bucket_size - seq_len
+    if padding > 0:
+        x = torch.nn.functional.pad(x, (0, padding), value=pad_v)
+    return x
+
+
 @dataclasses.dataclass
 class ESMFoldConfig:
     trunk: T.Any = dataclasses.field(default_factory=FoldingTrunkConfig)
@@ -284,6 +308,7 @@ class ESMFold(nn.Module):
         num_recycles: int | None = None,
         residue_index_offset: int | None = 512,
         chain_linker: str | None = "G" * 25,
+        pad_to_bucket: bool = True,
     ):
         """Runs a forward pass given input sequences.
 
@@ -300,6 +325,8 @@ class ESMFold(nn.Module):
                 single chain predictions. Default: 512.
             chain_linker (str): Linker to use between chains if predicting a multimer. Has no effect on single chain
                 predictions. Default: length-25 poly-G ("G" * 25).
+            pad_to_bucket (bool): Whether to pad the input sequences to the next bucket size. This can make inference more
+                efficient, but will use more memory. Default: True.
         """
         if isinstance(sequences, str):
             sequences = [sequences]
@@ -316,6 +343,12 @@ class ESMFold(nn.Module):
         aatype, mask, residx, linker_mask = map(
             lambda x: x.to(self.device), (aatype, mask, residx, linker_mask)
         )
+        if pad_to_bucket:
+            aatype = pad_to_bucket_size(aatype)
+            mask = pad_to_bucket_size(mask)
+            residx = pad_to_bucket_size(residx)
+            linker_mask = pad_to_bucket_size(linker_mask)
+            chain_index = pad_to_bucket_size(chain_index, pad_v=-1)
 
         output = self.forward(
             aatype,
@@ -324,16 +357,11 @@ class ESMFold(nn.Module):
             masking_pattern=masking_pattern,
             num_recycles=num_recycles,
         )
-
-        output["atom37_atom_exists"] = output[
-            "atom37_atom_exists"
-        ] * linker_mask.unsqueeze(2)
-
+        output["atom37_atom_exists"] *= linker_mask.unsqueeze(2)
         output["mean_plddt"] = (output["plddt"] * output["atom37_atom_exists"]).sum(
             dim=(1, 2)
         ) / output["atom37_atom_exists"].sum(dim=(1, 2))
         output["chain_index"] = chain_index
-
         return output
 
     def output_to_pdb(self, output: dict) -> list[str]:

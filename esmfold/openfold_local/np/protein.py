@@ -185,7 +185,9 @@ def to_pdb(prot: Protein) -> str:
     chain_ids = {}
     for i in np.unique(chain_index):  # np.unique gives sorted output.
         if i >= PDB_MAX_CHAINS:
-            raise ValueError(f"The PDB format supports at most {PDB_MAX_CHAINS} chains.")
+            raise ValueError(
+                f"The PDB format supports at most {PDB_MAX_CHAINS} chains."
+            )
         chain_ids[i] = PDB_CHAIN_IDS[i]
 
     headers = get_pdb_headers(prot)

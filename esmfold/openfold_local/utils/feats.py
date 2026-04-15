@@ -41,7 +41,6 @@ def torsion_angles_to_frames(
     aatype: torch.Tensor,
     rrgdf: torch.Tensor,
 ):
-
     rigid_type = type(r)
 
     # [*, N, 8, 4, 4]

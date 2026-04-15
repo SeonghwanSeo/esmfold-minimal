@@ -57,7 +57,6 @@ class AngleResnetBlock(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, a: torch.Tensor) -> torch.Tensor:
-
         s_initial = a
 
         a = self.relu(a)
@@ -217,7 +216,9 @@ class InvariantPointAttention(nn.Module):
         self.head_weights = nn.Parameter(torch.zeros(no_heads))
         ipa_point_weights_init_(self.head_weights)
 
-        concat_out_dim = self.no_heads * (self.c_z + self.c_hidden + self.no_v_points * 4)
+        concat_out_dim = self.no_heads * (
+            self.c_z + self.c_hidden + self.no_v_points * 4
+        )
         self.linear_out = Linear(concat_out_dim, self.c_s, init="final")
 
         self.softmax = nn.Softmax(dim=-1)
@@ -291,7 +292,9 @@ class InvariantPointAttention(nn.Module):
         kv_pts = kv_pts.view(kv_pts.shape[:-2] + (self.no_heads, -1, 3))
 
         # [*, N_res, H, P_q/P_v, 3]
-        k_pts, v_pts = torch.split(kv_pts, [self.no_qk_points, self.no_v_points], dim=-2)
+        k_pts, v_pts = torch.split(
+            kv_pts, [self.no_qk_points, self.no_v_points], dim=-2
+        )
 
         ##########################
         # Compute attention scores
@@ -322,7 +325,9 @@ class InvariantPointAttention(nn.Module):
         head_weights = self.softplus(self.head_weights).view(
             *((1,) * len(pt_att.shape[:-2]) + (-1, 1))
         )
-        head_weights = head_weights * math.sqrt(1.0 / (3 * (self.no_qk_points * 9.0 / 2)))
+        head_weights = head_weights * math.sqrt(
+            1.0 / (3 * (self.no_qk_points * 9.0 / 2))
+        )
         if inplace_safe:
             pt_att *= head_weights
         else:

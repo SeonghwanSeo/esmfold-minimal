@@ -475,7 +475,6 @@ class ESMStructuralSplitDataset(torch.utils.data.Dataset):
         return True
 
     def download(self):
-
         if self._check_exists():
             print("Files already downloaded and verified")
             return

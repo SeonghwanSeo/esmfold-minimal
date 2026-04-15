@@ -64,7 +64,6 @@ def batch_encode_sequences(
     residue_index_offset: int | None = 512,
     chain_linker: str | None = "G" * 25,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-
     aatype_list = []
     residx_list = []
     linker_mask_list = []
@@ -117,7 +116,9 @@ def output_to_pdb(output: dict) -> list[str]:
     return pdbs
 
 
-def collate_dense_tensors(samples: list[torch.Tensor], pad_v: float = 0) -> torch.Tensor:
+def collate_dense_tensors(
+    samples: list[torch.Tensor], pad_v: float = 0
+) -> torch.Tensor:
     """
     Takes a list of tensors with the following dimensions:
         [(d_11,       ...,           d_1K),
@@ -135,7 +136,9 @@ def collate_dense_tensors(samples: list[torch.Tensor], pad_v: float = 0) -> torc
         )
     (device,) = tuple(set(x.device for x in samples))  # assumes all on same device
     max_shape = [max(lst) for lst in zip(*[x.shape for x in samples])]
-    result = torch.empty(len(samples), *max_shape, dtype=samples[0].dtype, device=device)
+    result = torch.empty(
+        len(samples), *max_shape, dtype=samples[0].dtype, device=device
+    )
     result.fill_(pad_v)
     for i in range(len(samples)):
         result_i = result[i]
@@ -191,7 +194,9 @@ class Attention(nn.Module):
 
         # Do not attend to padding tokens.
         if mask is not None:
-            mask = repeat(mask, "... lk -> ... h lq lk", h=self.num_heads, lq=q.shape[-2])
+            mask = repeat(
+                mask, "... lk -> ... h lq lk", h=self.num_heads, lq=q.shape[-2]
+            )
             a = a.masked_fill(mask == False, -np.inf)
 
         a = F.softmax(a, dim=-1)

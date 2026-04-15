@@ -723,11 +723,15 @@ class Rotation:
         """
         if self._rot_mats is not None:
             rot_mats = self._rot_mats.view(self._rot_mats.shape[:-2] + (9,))
-            rot_mats = torch.stack(list(map(fn, torch.unbind(rot_mats, dim=-1))), dim=-1)
+            rot_mats = torch.stack(
+                list(map(fn, torch.unbind(rot_mats, dim=-1))), dim=-1
+            )
             rot_mats = rot_mats.view(rot_mats.shape[:-1] + (3, 3))
             return Rotation(rot_mats=rot_mats, quats=None)
         elif self._quats is not None:
-            quats = torch.stack(list(map(fn, torch.unbind(self._quats, dim=-1))), dim=-1)
+            quats = torch.stack(
+                list(map(fn, torch.unbind(self._quats, dim=-1))), dim=-1
+            )
             return Rotation(rot_mats=None, quats=quats, normalize_quats=False)
         else:
             raise ValueError("Both rotations are None")
@@ -1093,7 +1097,9 @@ class Rigid:
             The transformed Rigid object
         """
         new_rots = self._rots.map_tensor_fn(fn)
-        new_trans = torch.stack(list(map(fn, torch.unbind(self._trans, dim=-1))), dim=-1)
+        new_trans = torch.stack(
+            list(map(fn, torch.unbind(self._trans, dim=-1))), dim=-1
+        )
 
         return Rigid(new_rots, new_trans)
 

@@ -74,7 +74,9 @@ class Rigid3Array:
         return self.rotation.apply_inverse_to_point(new_point)
 
     def invert_apply(self, point: torch.Tensor) -> torch.Tensor:
-        return self.apply_inverse_to_point(vector.Vec3Array.from_array(point)).to_tensor()
+        return self.apply_inverse_to_point(
+            vector.Vec3Array.from_array(point)
+        ).to_tensor()
 
     def compose_rotation(self, other_rotation):
         rot = self.rotation @ other_rotation
